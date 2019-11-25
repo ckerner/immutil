@@ -1,0 +1,148 @@
+#!/bin/bash
+#===============================================================================#
+# immutil - SpectrumScale File Immutabilty Utility                              #
+#-------------------------------------------------------------------------------#
+# Chad Kerner                                              ckerner@illinois.edu #
+# Senior Storage Engineer                                 chad.kerner@gmail.com #
+# Storage Enabling Technologies                                                 #
+# National Center for Supercomputing Applications                               #
+# University of Illinois, Urbana-Champaign                                      #
+#-------------------------------------------------------------------------------#
+#                                                                               #
+#===============================================================================#
+
+FUNC=$1
+shift
+
+function print_help() {
+    PROG=`basename $0`
+    cat <<EOHELP
+
+    Usage: ${PROG} COMMAND FILE1 ... FILEx
+
+    Command    Usage
+    on         Set the immutability flag on a file. Ex: ${PROG} on FILE1 ... FILEx
+    off        Set the immutability flag off for a file. Ex: ${PROG} on FILE1 ... FILEx
+    eval       Evaluate the immutablility. Returns a 1 if set, a 0 if not set.
+    -q|query   Display immutability setting. Ex: ${PROG} query FILE1 ... FILEx
+    rm|del     Remove a file that has the immutability set. Ex: ${PROG} rm FILE1 ... FILEx
+    cp         Copy a file into the protected area. Ex: ${PROG} cp [SRC] [DEST]
+    mv         Move a file into the protected area. Ex: ${PROG} cp [SRC] [DEST]
+    stat       
+    dump
+
+EOHELP
+
+    exit 0
+}
+
+function toggle_imm_on() {
+    FILE_LIST=$*
+    MAXRC=0
+    TOTERR=0
+    FCOUNT=0
+
+    if [ "x${FILE_LIST}" == "x" ] ; then
+       echo "ERROR: No files specified."
+    fi
+
+    for IMM_FILE in ${FILE_LIST}
+        do FCOUNT=$((FCOUNT+=1))
+        printf "Turn On Immutability: %s " ${IMM_FILE}
+        if [[ ! -f ${IMM_FILE} ]] ; then
+           if [ ${MAXRC} -lt 1 ] ; then
+              MAXRC=1
+              printf "ERROR: File does not exist."
+           fi
+        else
+           /usr/lpp/mmfs/bin/mmchattr -i yes ${IMM_FILE}
+           RC=$?
+           printf "RC: %s\n" ${RC}
+           if [ ${MAXRC} -lt ${RC} ] ; then
+              MAXRC=${RC}
+           fi
+        fi
+    done
+    printf "\nFiles Processed: %s  Errors: %s  MAX RC: %s\n" ${FCOUNT} ${TOTERR} ${MAXRC}
+    exit ${MAXRC}
+}
+
+function toggle_imm_off() {
+    FILE_LIST=$*
+    MAXRC=0
+    TOTERR=0
+    FCOUNT=0
+
+    if [ "x${FILE_LIST}" == "x" ] ; then
+       echo "ERROR: No files specified."
+    fi
+
+    for IMM_FILE in ${FILE_LIST}
+        do FCOUNT=$((FCOUNT+=1))
+        printf "Turn Off Immutability: %s " ${IMM_FILE}
+        if [[ ! -f ${IMM_FILE} ]] ; then
+           if [ ${MAXRC} -lt 1 ] ; then
+              MAXRC=1
+              printf "ERROR: File does not exist."
+           fi
+        else
+           /usr/lpp/mmfs/bin/mmchattr -i no ${IMM_FILE}
+           RC=$?
+           printf "RC: %s\n" ${RC}
+           if [ ${MAXRC} -lt ${RC} ] ; then
+              MAXRC=${RC}
+           fi
+        fi
+    done
+    printf "\nFiles Processed: %s  Errors: %s  MAX RC: %s\n" ${FCOUNT} ${TOTERR} ${MAXRC}
+    exit ${MAXRC}
+
+}
+
+
+function eval_imm() {
+    IMM_FILE=$*
+    
+    IMCNT=`/usr/lpp/mmfs/bin/mmlsattr -L ${IMM_FILE} | grep -E "^immutable" | grep yes | wc -l`
+    echo ${IMCNT}    
+}
+
+function dump_file_attributes() {
+    FILE_LIST=$*
+
+    if [ "x${FILE_LIST}" == "x" ] ; then
+       echo "ERROR: No files specified."
+    fi
+
+    for IMM_FILE in ${FILE_LIST}
+        do if [[ ! -f ${IMM_FILE} ]] ; then
+           printf "Error: File Missing: %s\n" ${IMM_FILE}
+        else
+           ls -l ${IMM_FILE}
+           printf "\n" 
+           stat ${IMM_FILE}
+           printf "\n" 
+           /usr/lpp/mmfs/bin/mmlsattr -L ${IMM_FILE}
+           printf "\n" 
+           /usr/lpp/mmfs/bin/mmgetacl ${IMM_FILE}
+        fi
+        printf "\n\n" 
+    done
+
+}
+
+# Main Code Block
+{
+    if [ "x${FUNC}" == "x" ] ; then
+       print_help
+    fi
+
+    case ${FUNC} in 
+      on)      toggle_imm_on $* ;;
+      off)     toggle_imm_off $* ;;
+      eval)    eval_imm $* ;;
+      dump)    dump_file_attributes $* ;;
+      *)       print_help ;;
+    esac
+}
+
